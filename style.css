@@ -28,6 +28,9 @@ h1 { font-size: clamp(26px, 3.5vw, 33px); margin: 0 0 10px; line-height: 1.2; le
 .connection.online i { background: #28a783; }
 .connection.error { color: #a35144; }
 .connection.error i { background: #d9806c; }
+.header-buttons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.reset-button { border: 1px solid #ccd8dd; color: #536670; background: #fff; padding: 11px 13px; font-weight: 700; font-size: 13px; border-radius: 9px; }
+.reset-button:hover { background: #f5f7f8; border-color: #9daeb6; }
 .share-button { border: 1px solid var(--mint); background: var(--mint); color: #fff; padding: 11px 15px; font-weight: 700; font-size: 13px; border-radius: 9px; box-shadow: 0 2px 7px rgba(25,96,89,.08); }
 .share-button:hover:not(:disabled) { background: #12574f; }
 .question-list { display: flex; flex-direction: column; gap: 16px; }
@@ -76,6 +79,7 @@ body[data-role="teacher"] .hand-canvas, body[data-role="teacher"] .note-canvas {
   .page-header { align-items: flex-start; flex-direction: column; padding: 0 4px 20px; gap: 17px; }
   .header-tools { min-width: 0; width: 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .header-tools p.tiny-helper { display: none; }
+  .header-buttons { width: 100%; justify-content: flex-start; }
   h1 { font-size: 26px; }
   .question-list { gap: 12px; }
   .question-card { padding: 18px 14px 19px; border-radius: 10px; }
