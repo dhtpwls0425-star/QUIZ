@@ -24,6 +24,7 @@
   let connection = null;
   let toastTimeout;
   let reconnectTimeout;
+  let draftSaveTimer = null;
   // Reset generation prevents old submissions from reappearing on reconnect.
   let resetVersion = IS_TEACHER ? (Number(localStorage.getItem(TEACHER_RESET_KEY)) || 0)
     : (localStorage.getItem(STUDENT_RESET_KEY) === null ? null : Number(localStorage.getItem(STUDENT_RESET_KEY)) || 0);
@@ -62,11 +63,27 @@
     return drafts[id];
   }
 
+  // 많은 필기를 획마다 전부 저장하면 Safari 메인 스레드가 막힐 수 있습니다.
+  function flushDrafts() {
+    if (IS_TEACHER) return;
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+    writeJSON(DRAFT_KEY, drafts);
+  }
+
   function updateDraft(id) {
     const draft = draftFor(id);
     draft.revision += 1;
-    writeJSON(DRAFT_KEY, drafts);
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(flushDrafts, 900);
     updateCardStatus(id);
+  }
+
+  if (!IS_TEACHER) {
+    window.addEventListener("pagehide", flushDrafts);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushDrafts();
+    });
   }
 
   function updateCardStatus(id) {
@@ -250,6 +267,7 @@
     let height = 1;
     let drawing = null;
     let activePointer = null;
+    let drawingRect = null;
 
     const strokeStyle = () => {
       ctx.strokeStyle = "#24424a";
@@ -293,25 +311,50 @@
       width = rect.width;
       height = rect.height;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
+      const pixelWidth = Math.max(1, Math.round(width * dpr));
+      const pixelHeight = Math.max(1, Math.round(height * dpr));
+      // 동일한 크기로 다시 설정해도 캔버스의 기존 선이 지워집니다.
+      if (ctx && canvas.width === pixelWidth && canvas.height === pixelHeight) return;
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
       ctx = canvas.getContext("2d", {alpha: true});
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw();
     }
 
     const position = event => {
-      const bounds = canvas.getBoundingClientRect();
+      // 한 획 동안 캔버스 위치를 캐시해 이동 이벤트마다 레이아웃을 읽지 않습니다.
+      const bounds = drawingRect || canvas.getBoundingClientRect();
       return [
         Math.min(10000, Math.max(0, Math.round((event.clientX - bounds.left) / bounds.width * 10000))),
         Math.min(10000, Math.max(0, Math.round((event.clientY - bounds.top) / bounds.height * 10000)))
       ];
     };
 
+    function appendPoint(event) {
+      if (!drawing) return;
+      const [x, y] = position(event);
+      const points = drawing.points;
+      const previousX = points[points.length - 2];
+      const previousY = points[points.length - 1];
+      if (Math.abs(x - previousX) + Math.abs(y - previousY) < 3) return;
+      if (points.length >= 16000) return;
+      points.push(x, y);
+      const [px, py] = pointXY(previousX, previousY);
+      const [nx, ny] = pointXY(x, y);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+    }
+
     function finish(event) {
       if (!drawing || event.pointerId !== activePointer) return;
+      // 빠른 획에서 pointermove 없이 펜을 떼더라도 끝점을 저장합니다.
+      if (event.type === "pointerup") appendPoint(event);
       drawing = null;
       activePointer = null;
+      drawingRect = null;
       updateDraft(id);
     }
 
@@ -321,7 +364,8 @@
         if (event.pointerType === "mouse" && event.button !== 0) return;
         event.preventDefault();
         activePointer = event.pointerId;
-        canvas.setPointerCapture(event.pointerId);
+        drawingRect = canvas.getBoundingClientRect();
+        try { canvas.setPointerCapture(event.pointerId); } catch { /* Safari에서 캡처가 제한될 경우에도 기록 */ }
         const [x, y] = position(event);
         drawing = { points: [x, y] };
         ink.push(drawing);
@@ -334,22 +378,16 @@
       canvas.addEventListener("pointermove", event => {
         if (!drawing || event.pointerId !== activePointer) return;
         event.preventDefault();
-        const [x, y] = position(event);
-        const points = drawing.points;
-        const previousX = points[points.length - 2];
-        const previousY = points[points.length - 1];
-        if (Math.abs(x - previousX) + Math.abs(y - previousY) < 6) return;
-        if (points.length >= 16000) return;
-        points.push(x, y);
-        const [px, py] = pointXY(previousX, previousY);
-        const [nx, ny] = pointXY(x, y);
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(nx, ny);
-        ctx.stroke();
+        // 브라우저가 펜의 여러 이동 좌표를 합쳤다면 중간 좌표를 복원합니다.
+        const samples = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
+        for (const sample of samples) appendPoint(sample);
+        appendPoint(event);
       });
       canvas.addEventListener("pointerup", finish);
       canvas.addEventListener("pointercancel", finish);
+      // 포인터 캡처가 실패할 때도 펜을 뗀 사실을 놓치지 않습니다.
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
       canvas.addEventListener("lostpointercapture", event => {
         if (drawing && event.pointerId === activePointer) finish(event);
       });
@@ -382,6 +420,7 @@
   }
 
   function submitQuestion(id) {
+    flushDrafts();
     const question = byId.get(id);
     const draft = draftFor(id);
     const revision = draft.revision;
@@ -479,6 +518,8 @@
   }
 
   function clearStudentAnswers() {
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
     emptyObject(drafts);
     emptyObject(pending);
     emptyObject(sent);
