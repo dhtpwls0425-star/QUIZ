@@ -63,7 +63,7 @@ h1 { font-size: clamp(26px, 3.5vw, 33px); margin: 0 0 10px; line-height: 1.2; le
 .pad-tools { display: flex; gap: 14px; }
 .pad-tool { border: 0; background: transparent; color: #8b979c; font-size: 11px; padding: 3px 0; }
 .pad-tool:hover { color: #29464b; }
-.hand-canvas, .note-canvas { display: block; width: 100%; background-color: #fff; border-radius: 8px; border: 1px solid #dce4e7; }
+.hand-canvas, .note-canvas { display: block; width: 100%; background-color: #fff; border-radius: 8px; border: 1px solid #dce4e7; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .hand-canvas { height: 104px; touch-action: none; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 60px, #f6f9f9 61px); }
 .note-canvas { height: 185px; touch-action: none; background-image: repeating-linear-gradient(to bottom, #fff 0px, #fff 34px, var(--blue-line) 35px, #fff 36px); background-size: 100% 36px; }
 body[data-role="teacher"] .hand-canvas, body[data-role="teacher"] .note-canvas { touch-action: auto; }
