@@ -5,10 +5,12 @@
   const IS_TEACHER = ROLE === "teacher";
   const QUESTIONS = window.MATH_QUESTIONS || [];
   const byId = new Map(QUESTIONS.map(q => [q.id, q]));
-  const DRAFT_KEY = "electrical-math-v1-student-drafts";
-  const PENDING_KEY = "electrical-math-v1-pending";
-  const SENT_KEY = "electrical-math-v1-sent";
-  const RECEIVED_KEY = "electrical-math-v1-teacher-received";
+  const DRAFT_KEY = "electrical-math-v2-student-drafts";
+  const PENDING_KEY = "electrical-math-v2-pending";
+  const SENT_KEY = "electrical-math-v2-sent";
+  const RECEIVED_KEY = "electrical-math-v2-teacher-received";
+  const TEACHER_RESET_KEY = "electrical-math-v2-reset-version";
+  const STUDENT_RESET_KEY = "electrical-math-v2-student-version";
   const root = document.getElementById("questions");
   const statusNode = document.getElementById("connection-status");
   const toastNode = document.getElementById("toast");
@@ -22,6 +24,9 @@
   let connection = null;
   let toastTimeout;
   let reconnectTimeout;
+  // Reset generation prevents old submissions from reappearing on reconnect.
+  let resetVersion = IS_TEACHER ? (Number(localStorage.getItem(TEACHER_RESET_KEY)) || 0)
+    : (localStorage.getItem(STUDENT_RESET_KEY) === null ? null : Number(localStorage.getItem(STUDENT_RESET_KEY)) || 0);
 
   function readJSON(key, fallback) {
     try {
@@ -389,6 +394,7 @@
       answer: question.type === "ink" ? cloneStrokes(draft.answer) : [],
       note: cloneStrokes(draft.note),
       revision,
+      resetVersion: resetVersion === null ? 0 : resetVersion,
       sentAt: Date.now()
     };
     pending[id] = submission;
@@ -414,6 +420,7 @@
     const question = byId.get(message?.questionId);
     if (!question || message?.type !== "submission" || typeof message.id !== "string" || message.id.length > 90) return;
     if (message.kind !== question.type) return;
+    if (message.resetVersion !== resetVersion) return;
     const id = question.id;
     const clean = {
       id: message.id,
@@ -456,11 +463,76 @@
     toast(`${id}번 답안이 선생님에게 전달되었습니다.`);
   }
 
+  function emptyObject(target) {
+    for (const key of Object.keys(target)) delete target[key];
+  }
+
+  function clearTeacherAnswers() {
+    emptyObject(received);
+    localStorage.removeItem(RECEIVED_KEY);
+    for (const question of QUESTIONS) {
+      if (question.type === "choice") updateChoices(question.id, null);
+      else pads.get(`${question.id}-answer`)?.setInk([]);
+      pads.get(`${question.id}-note`)?.setInk([]);
+      updateCardStatus(question.id);
+    }
+  }
+
+  function clearStudentAnswers() {
+    emptyObject(drafts);
+    emptyObject(pending);
+    emptyObject(sent);
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(PENDING_KEY);
+    localStorage.removeItem(SENT_KEY);
+    for (const question of QUESTIONS) {
+      if (question.type === "choice") updateChoices(question.id, null);
+      else pads.get(`${question.id}-answer`)?.setInk([]);
+      pads.get(`${question.id}-note`)?.setInk([]);
+      updateCardStatus(question.id);
+    }
+    writeJSON(DRAFT_KEY, drafts);
+  }
+
+  function synchronizeStudentVersion(message) {
+    const incoming = Number(message?.resetVersion);
+    if (!Number.isSafeInteger(incoming) || incoming < 0) return;
+    const needsReset = resetVersion !== incoming && (resetVersion !== null || incoming > 0);
+    resetVersion = incoming;
+    localStorage.setItem(STUDENT_RESET_KEY, String(incoming));
+    if (needsReset) {
+      clearStudentAnswers();
+      toast("선생님이 모든 답안과 필기를 초기화했습니다.");
+    }
+    if (connection?.open) connection.send({type: "reset-ack", resetVersion: incoming});
+  }
+
+  function resetAllByTeacher() {
+    if (!window.confirm("학생의 모든 객관식 선택과 손글씨 정답·풀이 노트를 지우고, 선생님 화면의 제출 기록도 삭제합니다. 진행할까요?")) return;
+    resetVersion += 1;
+    localStorage.setItem(TEACHER_RESET_KEY, String(resetVersion));
+    clearTeacherAnswers();
+    if (connection?.open) {
+      connection.send({type: "reset-all", resetVersion});
+      toast("전체 초기화 요청을 학생 화면에 전송했습니다.");
+    } else {
+      toast("선생님 화면을 초기화했습니다. 학생은 다음 연결 시 초기화됩니다.");
+    }
+  }
+
   function attachTeacherConnection(conn) {
     if (connection && connection !== conn) connection.close();
     connection = conn;
-    conn.on("open", () => setConnectionStatus("학생 연결됨", "online"));
-    conn.on("data", receiveSubmission);
+    conn.on("open", () => {
+      setConnectionStatus("학생 연결됨", "online");
+      conn.send({type: "sync-version", resetVersion});
+    });
+    conn.on("data", message => {
+      if (message?.type === "submission") receiveSubmission(message);
+      else if (message?.type === "reset-ack" && message.resetVersion === resetVersion) {
+        toast("학생 화면의 초기화 상태를 확인했습니다.");
+      }
+    });
     conn.on("close", () => {
       if (connection === conn) { connection = null; setConnectionStatus("학생 연결 대기 중"); }
     });
@@ -471,6 +543,7 @@
 
   function startTeacher() {
     const linkButton = document.getElementById("copy-link");
+    document.getElementById("reset-all").addEventListener("click", resetAllByTeacher);
     if (!window.Peer) { setConnectionStatus("통신 라이브러리를 불러오지 못함", "error"); return; }
     peer = new Peer(undefined, {debug: 1});
     peer.on("open", teacherId => {
@@ -512,6 +585,7 @@
     });
     conn.on("data", message => {
       if (message?.type === "receipt") receiveReceipt(message);
+      else if (message?.type === "reset-all" || message?.type === "sync-version") synchronizeStudentVersion(message);
     });
     conn.on("close", () => {
       if (connection !== conn) return;
