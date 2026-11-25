@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>학생 | 수학 기초 진단평가</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script defer src="questions.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body data-role="student">
+  <div class="site-wrap">
+    <header class="page-header">
+      <div class="header-title">
+        <span class="eyebrow">전기과 신입생 · 기초 수학</span>
+        <h1>수학 기초 진단평가</h1>
+        <p>20문항 · 각 문제를 푼 뒤 오른쪽의 <strong>제출</strong>을 눌러 주세요.</p>
+      </div>
+      <div class="header-tools student-header-tools">
+        <div class="connection" id="connection-status" role="status" aria-live="polite"><i></i><span>선생님 연결 중</span></div>
+      </div>
+    </header>
+    <main id="questions" class="question-list"></main>
+    <footer class="page-footer">제출 전 필기는 이 기기에 임시 저장됩니다. 모르는 문제는 빈칸으로 제출해도 괜찮습니다.</footer>
+  </div>
+  <div id="toast" class="toast" aria-live="polite"></div>
+</body>
+</html>

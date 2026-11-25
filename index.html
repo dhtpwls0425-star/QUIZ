@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>선생님 | 수학 기초 진단평가</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script defer src="questions.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body data-role="teacher">
+  <div class="site-wrap">
+    <header class="page-header">
+      <div class="header-title">
+        <span class="eyebrow">전기과 신입생 · 기초 수학</span>
+        <h1>수학 기초 진단평가</h1>
+        <p>20문항 · 학생이 문제별로 제출한 답안과 필기를 확인합니다.</p>
+      </div>
+      <div class="header-tools">
+        <div class="connection" id="connection-status" role="status" aria-live="polite"><i></i><span>연결 준비 중</span></div>
+        <button class="share-button" id="copy-link" disabled>학생 접속 링크 복사</button>
+        <p class="tiny-helper" id="share-hint">선생님 화면을 켜 두고 학생 링크를 전달하세요.</p>
+      </div>
+    </header>
+    <main id="questions" class="question-list"></main>
+    <footer class="page-footer">학생의 필기는 제출한 시점에만 이 화면으로 전달됩니다.</footer>
+  </div>
+  <div id="toast" class="toast" aria-live="polite"></div>
+</body>
+</html>
